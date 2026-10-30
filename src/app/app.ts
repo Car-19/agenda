@@ -1,4 +1,3 @@
-
 import {
   AfterViewInit,
   Component,
@@ -24,10 +23,23 @@ export class App implements AfterViewInit, OnDestroy {
 
   fechaSeleccionada = this.clave(new Date());
   paginas: Date[] = [];
+
   selectorAbierto = false;
   herramienta: Herramienta = 'mano';
+
   notas: Record<string, string> = {};
   dibujos: Record<string, string> = {};
+
+  grosorLapiz = 2.5;
+  grosorGoma = 30;
+
+  posicionGoma = { x: 0, y: 0 };
+  mostrarGoma: string | null = null;
+  tamanoGomaVisual = 15;
+
+  private ultimoGrosor = 2.5;
+  private indicePaginaActual = 100;
+  private temporizadorRedimension: ReturnType<typeof setTimeout> | undefined;
 
   private flipbook?: PageFlip;
   private trazoActivo = false;
@@ -49,6 +61,7 @@ export class App implements AfterViewInit, OnDestroy {
     }
 
     this.generarPaginas(this.fechaSeleccionada);
+
     document.documentElement.style.overflow = 'hidden';
     document.body.style.margin = '0';
     document.body.style.overflow = 'hidden';
@@ -68,12 +81,14 @@ export class App implements AfterViewInit, OnDestroy {
   }
 
   formato(fecha: Date): string {
-    return new Intl.DateTimeFormat('es-ES', {
+    const texto = new Intl.DateTimeFormat('es-ES', {
       weekday: 'long',
       day: 'numeric',
       month: 'long',
       year: 'numeric'
     }).format(fecha);
+
+    return texto.charAt(0).toLocaleUpperCase('es-ES') + texto.slice(1);
   }
 
   private generarPaginas(fechaCentral: string): void {
@@ -91,59 +106,72 @@ export class App implements AfterViewInit, OnDestroy {
     this.crearFlipbook();
   }
 
-private crearFlipbook(): void {
-  const elemento = this.libro?.nativeElement;
-  if (!elemento) return;
+  private crearFlipbook(): void {
+    const elemento = this.libro?.nativeElement;
+    if (!elemento) return;
 
-  this.flipbook?.destroy();
+    this.flipbook?.destroy();
 
-  // El tamaño se calcula a partir del espacio real del libro.
-  const contenedor = elemento.parentElement;
-  if (!contenedor) return;
+    const contenedor = elemento.parentElement;
+    if (!contenedor) return;
 
-  const anchoPagina = Math.max(260, Math.floor(contenedor.clientWidth / 2));
-  const altoPagina = Math.max(360, Math.floor(contenedor.clientHeight));
+    const movilVertical =
+      window.innerWidth <= 650 &&
+      window.innerHeight > window.innerWidth;
 
-  this.flipbook = new PageFlip(elemento, {
-  width: anchoPagina,
-  height: altoPagina,
-  flippingTime: 750
-});
+    const paginasVisibles = movilVertical ? 1 : 2;
+    const proporcion = 0.70;
 
-  const paginasHTML = Array.from(
-    elemento.querySelectorAll<HTMLElement>('.page')
-  );
+    const anchoDisponible = contenedor.clientWidth / paginasVisibles;
+    const altoDisponible = contenedor.clientHeight;
 
-  this.flipbook.loadFromHTML(paginasHTML);
+    const altoPagina = Math.floor(
+      Math.min(altoDisponible, anchoDisponible / proporcion)
+    );
 
-  
-// Saltar a la página que corresponde a hoy.
-this.flipbook.turnToPage(100);
+    const anchoPagina = Math.floor(altoPagina * proporcion);
 
-this.flipbook = new PageFlip(elemento, {
-  width: anchoPagina,
-  height: altoPagina,
-  flippingTime: 750
-});
+    this.flipbook = new PageFlip(elemento, {
+      width: anchoPagina,
+      height: altoPagina,
+      flippingTime: 900,
+      usePortrait: true,
+      drawShadow: true,
+      maxShadowOpacity: 0.28,
+      swipeDistance: 30
+    });
 
-this.flipbook.loadFromHTML(paginasHTML);
-this.flipbook.turnToPage(100);
+    const paginasHTML = Array.from(
+      elemento.querySelectorAll<HTMLElement>('.page')
+    );
 
-  this.flipbook.on('flip', () => {
-    const indice = this.flipbook?.getCurrentPageIndex();
+    this.flipbook.loadFromHTML(paginasHTML);
 
-    if (indice !== undefined && this.paginas[indice]) {
-      this.fechaSeleccionada = this.clave(this.paginas[indice]);
+    const indice = Math.max(
+      0,
+      Math.min(this.indicePaginaActual, this.paginas.length - 1)
+    );
+
+    this.flipbook.turnToPage(indice);
+
+    this.flipbook.on('flip', () => {
+      const indiceActual = this.flipbook?.getCurrentPageIndex();
+
+      if (indiceActual !== undefined && this.paginas[indiceActual]) {
+        this.indicePaginaActual = indiceActual;
+        this.fechaSeleccionada = this.clave(this.paginas[indiceActual]);
+        this.restaurarDibujosVisibles();
+        this.mostrarGoma = null;
+      }
+    });
+
+    this.flipbook.on('changeState', () => {
       this.restaurarDibujosVisibles();
-    }
-  });
+    });
 
-  this.flipbook.on('changeState', () => {
     this.restaurarDibujosVisibles();
-  });
-
-  this.restaurarDibujosVisibles();
-}
+    this.seleccionarHerramienta(this.herramienta);
+  }
 
   guardarNota(fecha: string, texto: string): void {
     this.notas[fecha] = texto;
@@ -158,21 +186,29 @@ this.flipbook.turnToPage(100);
     }
   }
 
- seleccionarHerramienta(herramienta: Herramienta): void {
-  this.herramienta = herramienta;
-  this.trazoActivo = false;
+  seleccionarHerramienta(herramienta: Herramienta): void {
+    this.herramienta = herramienta;
+    this.trazoActivo = false;
 
-  if (this.flipbook) {
-    this.flipbook.updateSettings({
-      pointerInput: herramienta === 'mano' ? ALL_POINTERS : []
-    });
+    if (herramienta !== 'goma') {
+      this.mostrarGoma = null;
+    }
+
+    if (this.flipbook) {
+      this.flipbook.updateSettings({
+        pointerInput: herramienta === 'mano' ? ALL_POINTERS : []
+      });
+    }
   }
-}
 
   pasarPagina(direccion: number): void {
     if (!this.flipbook || this.reconstruyendo) return;
-    if (direccion > 0) this.flipbook.flipNext();
-    else this.flipbook.flipPrev();
+
+    if (direccion > 0) {
+      this.flipbook.flipNext();
+    } else {
+      this.flipbook.flipPrev();
+    }
   }
 
   alternarSelector(): void {
@@ -181,6 +217,7 @@ this.flipbook.turnToPage(100);
 
   seleccionarFecha(fecha: string): void {
     if (!fecha) return;
+
     this.selectorAbierto = false;
     this.irA(fecha);
   }
@@ -190,31 +227,59 @@ this.flipbook.turnToPage(100);
   }
 
   private irA(fecha: string): void {
-  this.fechaSeleccionada = fecha;
-  this.reconstruyendo = true;
-  this.generarPaginas(fecha);
+    this.fechaSeleccionada = fecha;
+    this.indicePaginaActual = 100;
+    this.reconstruyendo = true;
+    this.mostrarGoma = null;
 
-  setTimeout(() => {
-    this.crearFlipbook();
-    this.selectorAbierto = false;
-    this.reconstruyendo = false;
-  });
-}
+    this.generarPaginas(fecha);
+
+    setTimeout(() => {
+      this.crearFlipbook();
+      this.selectorAbierto = false;
+      this.reconstruyendo = false;
+    });
+  }
+
+  private coordenadas(
+    evento: PointerEvent,
+    canvas: HTMLCanvasElement
+  ): { x: number; y: number } {
+    const rect = canvas.getBoundingClientRect();
+
+    return {
+      x: (evento.clientX - rect.left) * (canvas.width / rect.width),
+      y: (evento.clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
 
   iniciarDibujo(evento: PointerEvent, canvas: HTMLCanvasElement): void {
     if (!this.dibujando) return;
+
     evento.preventDefault();
     canvas.setPointerCapture(evento.pointerId);
+
     this.trazoActivo = true;
     this.ultimoPunto = this.coordenadas(evento, canvas);
 
     const contexto = canvas.getContext('2d');
     if (!contexto) return;
 
+    this.ultimoGrosor = this.calcularGrosor(evento);
+
     contexto.save();
-    contexto.globalCompositeOperation = this.herramienta === 'goma' ? 'destination-out' : 'source-over';
+    contexto.globalCompositeOperation =
+      this.herramienta === 'goma' ? 'destination-out' : 'source-over';
+
     contexto.beginPath();
-    contexto.arc(this.ultimoPunto.x, this.ultimoPunto.y, this.herramienta === 'goma' ? 30 : 1.2, 0, Math.PI * 2);
+    contexto.arc(
+      this.ultimoPunto.x,
+      this.ultimoPunto.y,
+      this.ultimoGrosor / 2,
+      0,
+      Math.PI * 2
+    );
+
     contexto.fillStyle = '#51483d';
     contexto.fill();
     contexto.restore();
@@ -222,29 +287,54 @@ this.flipbook.turnToPage(100);
 
   moverDibujo(evento: PointerEvent, canvas: HTMLCanvasElement): void {
     if (!this.dibujando || !this.trazoActivo) return;
+
     evento.preventDefault();
 
     const punto = this.coordenadas(evento, canvas);
     const contexto = canvas.getContext('2d');
     if (!contexto) return;
 
+    const grosorActual = this.calcularGrosor(evento);
+    const grosorMedio = (this.ultimoGrosor + grosorActual) / 2;
+
     contexto.save();
-    contexto.globalCompositeOperation = this.herramienta === 'goma' ? 'destination-out' : 'source-over';
+    contexto.globalCompositeOperation =
+      this.herramienta === 'goma' ? 'destination-out' : 'source-over';
+
     contexto.beginPath();
     contexto.moveTo(this.ultimoPunto.x, this.ultimoPunto.y);
     contexto.lineTo(punto.x, punto.y);
+
     contexto.strokeStyle = '#51483d';
-    contexto.lineWidth = this.herramienta === 'goma' ? 60 : 2.5;
+    contexto.lineWidth = grosorMedio;
     contexto.lineCap = 'round';
     contexto.lineJoin = 'round';
     contexto.stroke();
     contexto.restore();
 
     this.ultimoPunto = punto;
+    this.ultimoGrosor = grosorActual;
+  }
+
+  private calcularGrosor(evento: PointerEvent): number {
+    const base = this.herramienta === 'goma'
+      ? this.grosorGoma
+      : this.grosorLapiz;
+
+    if (
+      this.herramienta === 'lapiz' &&
+      evento.pointerType === 'pen' &&
+      evento.pressure > 0
+    ) {
+      return base * (0.25 + evento.pressure * 1.5);
+    }
+
+    return base;
   }
 
   terminarDibujo(canvas: HTMLCanvasElement): void {
     if (!this.trazoActivo) return;
+
     this.trazoActivo = false;
 
     const fecha = canvas.dataset['canvasDate'];
@@ -254,18 +344,12 @@ this.flipbook.turnToPage(100);
     this.guardar('agenda-dibujos', this.dibujos);
   }
 
-  private coordenadas(evento: PointerEvent, canvas: HTMLCanvasElement) {
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: (evento.clientX - rect.left) * canvas.width / rect.width,
-      y: (evento.clientY - rect.top) * canvas.height / rect.height
-    };
-  }
-
   private restaurarDibujosVisibles(): void {
     if (!this.libro?.nativeElement) return;
 
-    const canvases = this.libro.nativeElement.querySelectorAll<HTMLCanvasElement>('canvas[data-canvas-date]');
+    const canvases = this.libro.nativeElement.querySelectorAll<HTMLCanvasElement>(
+      'canvas[data-canvas-date]'
+    );
 
     canvases.forEach(canvas => {
       const fecha = canvas.dataset['canvasDate'];
@@ -275,18 +359,36 @@ this.flipbook.turnToPage(100);
       if (!contexto) return;
 
       contexto.clearRect(0, 0, canvas.width, canvas.height);
+
       const guardado = this.dibujos[fecha];
       if (!guardado) return;
 
       const imagen = new Image();
-      imagen.onload = () => contexto.drawImage(imagen, 0, 0, canvas.width, canvas.height);
+
+      imagen.onload = () => {
+        contexto.drawImage(imagen, 0, 0, canvas.width, canvas.height);
+      };
+
       imagen.src = guardado;
     });
   }
 
   @HostListener('window:resize')
   redimensionar(): void {
-    // La biblioteca gestiona los cambios de tamaño de su contenedor.
+    if (!this.libro?.nativeElement || !this.flipbook) return;
+
+    this.indicePaginaActual = this.flipbook.getCurrentPageIndex();
+    this.reconstruyendo = true;
+
+    if (this.temporizadorRedimension) {
+      clearTimeout(this.temporizadorRedimension);
+    }
+
+    this.temporizadorRedimension = setTimeout(() => {
+      this.crearFlipbook();
+      this.reconstruyendo = false;
+      this.temporizadorRedimension = undefined;
+    }, 250);
   }
 
   @HostListener('document:keydown', ['$event'])
@@ -298,7 +400,10 @@ this.flipbook.turnToPage(100);
     }
 
     const elemento = evento.target as HTMLElement;
-    if (elemento?.tagName === 'TEXTAREA' || elemento?.tagName === 'INPUT') return;
+
+    if (elemento?.tagName === 'TEXTAREA' || elemento?.tagName === 'INPUT') {
+      return;
+    }
 
     if (evento.key === 'ArrowRight') this.pasarPagina(1);
     if (evento.key === 'ArrowLeft') this.pasarPagina(-1);
@@ -307,7 +412,42 @@ this.flipbook.turnToPage(100);
     if (evento.key.toLowerCase() === 'h') this.seleccionarHerramienta('mano');
   }
 
+  actualizarPunteroGoma(
+    evento: PointerEvent,
+    canvas: HTMLCanvasElement
+  ): void {
+    if (this.herramienta !== 'goma') {
+      this.mostrarGoma = null;
+      return;
+    }
+
+    const rect = canvas.getBoundingClientRect();
+
+    this.posicionGoma = {
+      x: evento.clientX - rect.left,
+      y: evento.clientY - rect.top
+    };
+
+    // Ajustamos el círculo visual al tamaño real del canvas en pantalla.
+    this.tamanoGomaVisual = this.grosorGoma * (rect.width / canvas.width);
+
+    // Solo se muestra el cursor de la página bajo el puntero.
+    this.mostrarGoma = canvas.dataset['canvasDate'] || null;
+  }
+
+  ocultarPunteroGoma(canvas: HTMLCanvasElement): void {
+    const fecha = canvas.dataset['canvasDate'];
+
+    if (this.mostrarGoma === fecha) {
+      this.mostrarGoma = null;
+    }
+  }
+
   ngOnDestroy(): void {
+    if (this.temporizadorRedimension) {
+      clearTimeout(this.temporizadorRedimension);
+    }
+
     this.flipbook?.destroy();
   }
 }

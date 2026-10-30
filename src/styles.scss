@@ -1,1 +1,77 @@
-/* You can add global styles to this file, and also import other style files */
+@media (max-width: 900px) and (orientation: landscape) {
+  main.agenda .book-shell {
+    width: min(92vw, calc(72dvh * 1.4));
+    height: min(72dvh, calc(92vw / 1.4));
+    transform: translateY(25px);
+  }
+
+  main.agenda .floating-tools {
+    top: 6px;
+    left: 50%;
+    right: auto;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  main.agenda .tool-button,
+  main.agenda .calendar-trigger {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+
+  main.agenda .tool-button svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  main.agenda .page-content {
+    padding: 12px;
+  }
+
+  main.agenda .page-header {
+    height: 44px;
+    padding: 2px 22px 8px;
+    font-size: clamp(10px, 1.5vw, 13px);
+  }
+
+  main.agenda .page-number {
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
+  }
+
+  main.agenda .writing-area {
+    top: 57px;
+    right: 12px;
+    bottom: 12px;
+    left: 12px;
+    background: repeating-linear-gradient(to bottom, transparent 0, transparent 24px, #bcb69f88 24px, #bcb69f88 25px);
+  }
+
+  main.agenda .writing-area textarea {
+    font-size: 12px;
+    line-height: 25px;
+  }
+
+  main.agenda .page-arrow {
+    width: 30px;
+    height: 42px;
+  }
+
+  main.agenda .previous-arrow {
+    left: calc(50% - min(46vw, 50.4dvh) - 34px);
+  }
+
+  main.agenda .next-arrow {
+    right: calc(50% - min(46vw, 50.4dvh) - 34px);
+  }
+
+  main.agenda .calendar-trigger.expanded {
+    position: fixed;
+    top: 6px;
+    right: auto;
+    left: 50%;
+    translate: -50% 0;
+  }
+}

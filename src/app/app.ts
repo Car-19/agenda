@@ -26,6 +26,7 @@ export class App implements AfterViewInit, OnDestroy {
 
   selectorAbierto = false;
   herramienta: Herramienta = 'mano';
+  ajustesDibujoAbiertos = false;
 
   notas: Record<string, string> = {};
   dibujos: Record<string, string> = {};
@@ -46,6 +47,7 @@ export class App implements AfterViewInit, OnDestroy {
   private ultimoPunto = { x: 0, y: 0 };
   private paginaInicial = 100;
   private reconstruyendo = false;
+  private ultimoAnchoVentana = window.innerWidth;
 
   get dibujando(): boolean {
     return this.herramienta !== 'mano';
@@ -188,6 +190,7 @@ export class App implements AfterViewInit, OnDestroy {
 
   seleccionarHerramienta(herramienta: Herramienta): void {
     this.herramienta = herramienta;
+    this.ajustesDibujoAbiertos = false;
     this.trazoActivo = false;
 
     if (herramienta !== 'goma') {
@@ -199,6 +202,15 @@ export class App implements AfterViewInit, OnDestroy {
         pointerInput: herramienta === 'mano' ? ALL_POINTERS : []
       });
     }
+  }
+
+  alternarAjustesHerramienta(herramienta: 'lapiz' | 'goma'): void {
+    if (this.herramienta !== herramienta) {
+      this.seleccionarHerramienta(herramienta);
+      return;
+    }
+
+    this.ajustesDibujoAbiertos = !this.ajustesDibujoAbiertos;
   }
 
   pasarPagina(direccion: number): void {
@@ -376,6 +388,14 @@ export class App implements AfterViewInit, OnDestroy {
   @HostListener('window:resize')
   redimensionar(): void {
     if (!this.libro?.nativeElement || !this.flipbook) return;
+
+    const anchoCambio = window.innerWidth !== this.ultimoAnchoVentana;
+    this.ultimoAnchoVentana = window.innerWidth;
+
+    const campoEnEdicion = document.activeElement instanceof HTMLElement &&
+      ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName);
+
+    if (campoEnEdicion && !anchoCambio) return;
 
     this.indicePaginaActual = this.flipbook.getCurrentPageIndex();
     this.reconstruyendo = true;

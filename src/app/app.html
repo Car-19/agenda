@@ -87,8 +87,9 @@
     <button
       class="tool-button"
       [class.active]="herramienta === 'lapiz'"
-      (click)="seleccionarHerramienta('lapiz')"
-      title="Lápiz"
+      (click)="alternarAjustesHerramienta('lapiz')"
+      [attr.aria-expanded]="herramienta === 'lapiz' && ajustesDibujoAbiertos"
+      title="Lápiz; volver a pulsar para ajustar el tamaño"
       aria-label="Lápiz"
     >
       <svg viewBox="0 0 24 24">
@@ -99,8 +100,9 @@
     <button
       class="tool-button"
       [class.active]="herramienta === 'goma'"
-      (click)="seleccionarHerramienta('goma')"
-      title="Goma"
+      (click)="alternarAjustesHerramienta('goma')"
+      [attr.aria-expanded]="herramienta === 'goma' && ajustesDibujoAbiertos"
+      title="Goma; volver a pulsar para ajustar el tamaño"
       aria-label="Goma"
     >
       <svg viewBox="0 0 24 24">
@@ -109,7 +111,7 @@
       </svg>
     </button>
 
-    @if (herramienta === 'lapiz' || herramienta === 'goma') {
+    @if (ajustesDibujoAbiertos && (herramienta === 'lapiz' || herramienta === 'goma')) {
       <div class="drawing-settings">
         @if (herramienta === 'lapiz') {
           <div class="settings-title">
